@@ -17,7 +17,7 @@ def run_kde():
     print test_data.shape
     print train_data.shape
     
-    lower_dimension = 2
+    lower_dimension = 4
     kde_cub = KDECUB(train_data, train_label, lower_dimension, test_data = test_data, test_label = test_label)
     kde_cub.train()
     #kde_cub.evaluate_calculation_speed()
