@@ -529,15 +529,13 @@ class KDECUB(object):
         '''  Refer http://www.ee.ucla.edu/~vandenbe/236C/lectures/gradient.pdf '''
         preserve_starting_A = self.A.copy()
         
-        beta  = 0.01
+        beta  = 0.0001
         alpha = 1
         
         self._project_data()
         self._clear_d_ch_ij_cache()
         current_cost = self.cost()
-        f_x = current_cost    
-        print gradient.shape, type(gradient)
-        -gradient.T*gradient
+        f_x = current_cost
         armijo_condition = beta*numpy.trace(-gradient.T*gradient)
         
         while True:            
