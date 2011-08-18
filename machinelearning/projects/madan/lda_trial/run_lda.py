@@ -26,8 +26,8 @@ def trial_running_lda():
     train_data    = train_data + 1e-100*random.randn(*train_data.shape)
 
     
-    run_lda = 0
-    run_pca = 1
+    run_lda = 1
+    run_pca = 0
     
     if run_lda:
         lda_trained_engine = LDA(train_data,train_label,dimension=4)
