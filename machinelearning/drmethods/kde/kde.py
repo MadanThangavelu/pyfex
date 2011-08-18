@@ -50,8 +50,17 @@ def multiprocessing_fast_chernoff_distance(required_data):
     #return float(sum(sum(distance_matrix, axis=1), axis=0))
     return distance_matrix
     
+def shared_variable_multiprocessing_fast_chernoff_distance(class_pair):
+    class_i, class_j = class_pair
+    required_data = (class_i, class_j, Dataset.ld_training_data, Dataset.class_indexes, Dataset.ld_sigma_inv)
+    return multiprocessing_fast_chernoff_distance(required_data)
     
-    
+def shared_multiprocessing_fast_chernoff_gradient(class_pair):
+    class_i, class_j = class_pair
+    required_data = (class_i, class_j, Dataset.A, Dataset.sigma, Dataset.ld_sigma_inv, Dataset.training_data, Dataset.ld_training_data,\
+                     Dataset.class_indexes, Dataset.pre_calculated_chernoff_distance_matrix)
+    return multiprocessing_fast_chernoff_gradient(required_data)
+
 def multiprocessing_fast_chernoff_gradient(required_data):
     class_i, class_j, A, sigma, ld_sigma_inv, training_data, ld_training_data, \
             class_indexes, pre_calculated_chernoff_distance_matrix = required_data
@@ -104,10 +113,21 @@ def multiprocessing_fast_chernoff_gradient(required_data):
     
     return (1.0/4)*(gTerm1 - gTerm2)
 
-
-
-
-
+class Dataset(object):
+    ''' Used as container of the data for multiprocessing '''
+    training_data     = None
+    train_label       = None
+    test_data         = None
+    test_label        = None
+    sigma             = None
+    A                 = None
+    ld_training_data  = None
+    ld_sigma          = None
+    ld_sigma_inv      = None
+    ld_test_data      = None
+    class_indexes     = None
+    pre_calculated_chernoff_distance_matrix = None
+    
 class KDECUB(object):
     def __init__(self, training_data, train_label, lower_dimension, test_data = None, test_label = None, use_multiprocessing=True, scale_data = True):
         
@@ -139,8 +159,17 @@ class KDECUB(object):
         marker_class_numbers = range(1, len(marker_points))
         self.markers =dict(zip(marker_class_numbers, marker_points))            
             
-        cost_calculation_lock = Lock()
-        gradient_calculation_lock = Lock()
+        ''' Setting up Dataset class '''
+        Dataset.training_data     = self.training_data
+        Dataset.train_label       = self.train_label
+        Dataset.test_data         = self.test_data
+        Dataset.test_label        = self.test_label
+        Dataset.sigma             = self.sigma
+        Dataset.ld_training_data  = None
+        Dataset.ld_test_data      = None
+        Dataset.ld_sigma          = None
+        Dataset.ld_sigma_inv      = None
+        Dataset.class_indexes     = self.class_indexes
         
     def test_gradient(self):
         self._initialize_A()
@@ -178,11 +207,14 @@ class KDECUB(object):
         attributes = self.training_data.shape[0]
         self.A = matrix(random.randn(self.lower_dimension, attributes))
         
+        
         ''' Initialize with pca plane '''
         #from drmethods.pca.method import pca as PCA
         #pca = PCA(array(self.training_data).T, output_dim=self.lower_dimension)
         #self.A = pca.v.T
         
+        ''' Assigning to common variable '''
+        Dataset.A = self.A
         
     def _project_data(self):
         self.ld_training_data = self.A*self.training_data
@@ -191,6 +223,10 @@ class KDECUB(object):
         self.ld_sigma_inv     = self.A*self.sigma*self.A.T
         self.ld_sigma_inv     = self.ld_sigma_inv.I
         
+        Dataset.ld_training_data  = self.ld_training_data
+        Dataset.ld_test_data      = self.ld_test_data
+        Dataset.ld_sigma          = self.ld_sigma
+        Dataset.ld_sigma_inv      = self.ld_sigma_inv
         # Testing bandwidth in the lower dimension
         #ld_gaussian = gaussian_kde(self.ld_training_data)
         #print ld_gaussian.covariance
@@ -427,33 +463,37 @@ class KDECUB(object):
                     required_data.append((class_i, class_j, self.ld_training_data, self.class_indexes, self.ld_sigma_inv))
                     
         pool = Pool(processes=8)              # start 4 worker process
-        chernoff_distance_matrices = pool.map(multiprocessing_fast_chernoff_distance, required_data)
+        #chernoff_distance_matrices = pool.map(multiprocessing_fast_chernoff_distance, required_data)
+        chernoff_distance_matrices  = pool.map(shared_variable_multiprocessing_fast_chernoff_distance, class_pairs)
         total_chernoff_distance = 0
         for idx, class_pair in enumerate(class_pairs):
             class_i, class_j = class_pair
             self.pre_calculated_chernoff_distance_matrix[class_i, class_j] = chernoff_distance_matrices[idx]
-            self.pre_calculated_chernoff_distance_matrix[class_j, class_i] = chernoff_distance_matrices[idx] 
+            self.pre_calculated_chernoff_distance_matrix[class_j, class_i] = chernoff_distance_matrices[idx]             
             total_chernoff_distance += float(sum(sum(chernoff_distance_matrices[idx], axis=1), axis=0))
         
+        Dataset.pre_calculated_chernoff_distance_matrix = self.pre_calculated_chernoff_distance_matrix
         return 2*sum(total_chernoff_distance)*(1.0/self.training_data.shape[1])
         
     def multiprocess_gradient(self):
         ''' A multiprocessing framework to parallelize
         the gradient computations  of kde '''
+        class_pairs = []
         required_data = []
         for class_i in self.class_indexes.keys():
             for class_j in self.class_indexes.keys():
                 if class_i == class_j:
                     continue
                 
-                if class_j > class_i: # Calculating only one pair of the classes           
+                if class_j > class_i: # Calculating only one pair of the classes 
+                    class_pairs.append((class_i, class_j))          
                     required_data.append((class_i, class_j, self.A, self.sigma, self.ld_sigma_inv,\
                                         self.training_data, self.ld_training_data, self.class_indexes, \
                                         self.pre_calculated_chernoff_distance_matrix ))
         
         pool = Pool(processes=8)              # start 4 worker process
-        gradients = pool.map(multiprocessing_fast_chernoff_gradient, required_data)
-        #gradients = multiprocessing_fast_chernoff_gradient(required_data[0])
+        #gradients = pool.map(multiprocessing_fast_chernoff_gradient, required_data)
+        gradients = pool.map(shared_multiprocessing_fast_chernoff_gradient, class_pairs)
         total_gradient = matrix(zeros(self.A.shape))
         for gradient in gradients:
             total_gradient += gradient
@@ -559,9 +599,11 @@ class KDECUB(object):
             step_size = self.backtracking_step_size(gradient)
             if step_size:
                 self.A = self.A - step_size*gradient
+                Dataset.A = self.A
             else:
                 print "Constant stepping"
                 self.A = self.A - 0.01*gradient
+                Dataset.A = self.A
             
             #print gradient
             
