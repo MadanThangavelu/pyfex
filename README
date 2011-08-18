@@ -1,1 +1,2 @@
 tag 0.0.2 -m "Non multiprocessing fast, functioning kde with backtracking"
+tag 0.0.4 -m "Complete multiprocessing package v1"
