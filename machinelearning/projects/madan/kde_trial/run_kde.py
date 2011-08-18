@@ -20,6 +20,10 @@ def run_kde():
     lower_dimension = 4
     kde_cub = KDECUB(train_data, train_label, lower_dimension, test_data = test_data, test_label = test_label)
     kde_cub.train()
+    #kde_cub._initialize_A()
+    #kde_cub._project_data()
+    #kde_cub.cost()
+    #kde_cub.multiprocess_gradient()
     #kde_cub.evaluate_calculation_speed()
     
     #kde_cub.test_gradient()

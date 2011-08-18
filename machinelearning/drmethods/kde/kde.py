@@ -426,7 +426,7 @@ class KDECUB(object):
                     class_pairs.append((class_i, class_j))
                     required_data.append((class_i, class_j, self.ld_training_data, self.class_indexes, self.ld_sigma_inv))
                     
-        pool = Pool(processes=4)              # start 4 worker process
+        pool = Pool(processes=8)              # start 4 worker process
         chernoff_distance_matrices = pool.map(multiprocessing_fast_chernoff_distance, required_data)
         total_chernoff_distance = 0
         for idx, class_pair in enumerate(class_pairs):
@@ -451,10 +451,10 @@ class KDECUB(object):
                                         self.training_data, self.ld_training_data, self.class_indexes, \
                                         self.pre_calculated_chernoff_distance_matrix ))
         
-        pool = Pool(processes=4)              # start 4 worker process
+        pool = Pool(processes=8)              # start 4 worker process
         gradients = pool.map(multiprocessing_fast_chernoff_gradient, required_data)
         #gradients = multiprocessing_fast_chernoff_gradient(required_data[0])
-        total_gradient = zeros(self.A.shape)
+        total_gradient = matrix(zeros(self.A.shape))
         for gradient in gradients:
             total_gradient += gradient
         
@@ -480,7 +480,8 @@ class KDECUB(object):
         #gradient = self.fast_gradient()
         #print "fast gradient", gradient
         
-        gradient = self.multiprocess_gradient()      
+        gradient = self.multiprocess_gradient()  
+        #print gradient - new_gradient    
         return  gradient
         
         
@@ -495,6 +496,8 @@ class KDECUB(object):
         self._clear_d_ch_ij_cache()
         current_cost = self.cost()
         f_x = current_cost    
+        print gradient.shape, type(gradient)
+        -gradient.T*gradient
         armijo_condition = beta*numpy.trace(-gradient.T*gradient)
         
         while True:            
@@ -549,7 +552,7 @@ class KDECUB(object):
             self._project_data()
             self.classification_error()
             #plot_2d(self.ld_training_data, self.train_label, self.markers)    
-            self._clear_d_ch_ij_cache()
+            self._clear_distance_cache()
             cost = self.cost()
             print cost
             gradient = self.gradient()
