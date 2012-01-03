@@ -14,6 +14,7 @@ from drmethods.pca.method import pca
 from scipy import random, linalg
 from multiprocessing import Pool, Lock
 
+
 POOL_SIZE = 10
 BATCH_SIZE = 1000
 
@@ -141,7 +142,7 @@ class KDECUB(object):
             self.training_data, self.test_data = scale_mean_zero(self.training_data, self.test_data)
                     
         self.lower_dimension  = lower_dimension
-        self.sigma            = matrix(self.estimate_bandwidth().covariance)
+        self.sigma            = matrix(self.estimate_bandwidth(self.training_data).covariance)
         self.train_label      = train_label
         self.classes          = sorted(list(set(self.train_label)))
         self.class_indexes    = self._prepare_class_indexes()
@@ -223,6 +224,10 @@ class KDECUB(object):
         self.ld_sigma_inv     = self.A*self.sigma*self.A.T
         self.ld_sigma_inv     = self.ld_sigma_inv.I
         
+        #Over riding with actual bandwidth calculation in the lower dimension
+        #self.ld_sigma         = matrix(self.estimate_bandwidth(self.ld_training_data).covariance)
+        #self.ld_sigma_inv     = self.ld_sigma.I
+        
         Dataset.ld_training_data  = self.ld_training_data
         Dataset.ld_test_data      = self.ld_test_data
         Dataset.ld_sigma          = self.ld_sigma
@@ -243,8 +248,8 @@ class KDECUB(object):
             class_indexes[each_class] = where(self.train_label == each_class)[0]
         return class_indexes    
     
-    def estimate_bandwidth(self):
-        return gaussian_kde(self.training_data)
+    def estimate_bandwidth(self, data):
+        return gaussian_kde(data)
     
     
     '''''''''''''''START'''''''''''''''''''''''''''''''''''''''''
@@ -547,18 +552,18 @@ class KDECUB(object):
             lhs = stepped_cost # f(x^k + \alpha p^k)
             rhs = f_x + alpha*armijo_condition
 
-            print "Performing backtracking search :  lhs", lhs, "rhs", rhs
+            #print "Performing backtracking search :  lhs", lhs, "rhs", rhs
             
             if lhs > rhs:
                 tou = 1.0/2
-                print "f_x, stepped_cost, alpha, lhs, rhs", f_x, stepped_cost, alpha, lhs, rhs
+                #print "f_x, stepped_cost, alpha, lhs, rhs", f_x, stepped_cost, alpha, lhs, rhs
                 alpha = tou*alpha
                 if alpha < 1e-5:
                     alpha = False
                     break
-                
             else:
                 break
+
             
         # Revert the state of A
         self.A = preserve_starting_A.copy()
@@ -588,21 +593,25 @@ class KDECUB(object):
         self._initialize_A()
         for i in range(500000):
             self._project_data()
-            self.classification_error()
+            classfication_error = self.classification_error()
             #plot_2d(self.ld_training_data, self.train_label, self.markers)    
             self._clear_distance_cache()
             cost = self.cost()
-            print cost
+            print "Cost function value", cost, "Error :", classfication_error
             gradient = self.gradient()
             step_size = self.backtracking_step_size(gradient)
             if step_size:
                 self.A = self.A - step_size*gradient
                 Dataset.A = self.A
             else:
-                print "Constant stepping"
+                #print "Constant stepping"
                 self.A = self.A - 0.01*gradient
                 Dataset.A = self.A
             
+            # Convert A to orthogonal A
+            #U, s, Vh = linalg.svd(self.A, full_matrices=False)
+            #self.A   = U*Vh
+            #Dataset.A = self.A
             #print gradient
             
     def classification_error(self):
@@ -610,5 +619,6 @@ class KDECUB(object):
         predictions = knn_test(knn_model = knn_model, test_data = self.ld_test_data) 
         misclassified = len(where(predictions - self.test_label !=0)[0])
         total_points  = len(self.test_label)
-        print "predictions : ", misclassified, total_points, misclassified*1.0/total_points
+        return misclassified*1.0/total_points
+        #print "predictions : ", misclassified, total_points, misclassified*1.0/total_points
         

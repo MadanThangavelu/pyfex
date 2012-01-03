@@ -3,7 +3,7 @@ Created on Aug 19, 2010
 
 @author: Madan Thangavelu
 '''
-from data.optdigits.adapter import Adapter as IRIS
+from data.balance.adapter import Adapter as IRIS
 from drmethods.lda.method import lda as LDA
 from drmethods.pca.method import pca as PCA
 from numpy import transpose,dot
@@ -24,20 +24,20 @@ def trial_running_lda():
     iris_dataset = IRIS(crossvalidation=1)
     test_data,test_label,train_data,train_label = iris_dataset.load_data()
     train_data    = train_data + 1e-100*random.randn(*train_data.shape)
-
     
     run_lda = 1
     run_pca = 0
+    lower_dimension = 2
     
     if run_lda:
-        lda_trained_engine = LDA(train_data,train_label,dimension=4)
+        lda_trained_engine = LDA(train_data,train_label,dimension=lower_dimension)
         dimension_reduced_test_data = lda_trained_engine(test_data)
         dimension_reduced_train_data = lda_trained_engine(train_data)
 
     if run_pca:
         pca = PCA(train_data,output_dim=4)
-        dimension_reduced_train_data = pca.execute(train_data,n=4)
-        dimension_reduced_test_data = pca.execute(test_data,n=4)
+        dimension_reduced_train_data = pca.execute(train_data,n=lower_dimension)
+        dimension_reduced_test_data = pca.execute(test_data,n=lower_dimension)
 
     train_data = train_data.T
     test_data  = test_data.T
